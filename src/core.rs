@@ -47,13 +47,18 @@ impl Transactor {
         Ok(())
     }
 
+
+    #[rustfmt::skip]
     /// Process a single transaction.
-    pub(crate) async fn process_transaction(&mut self, t: Transaction) -> TransactionResult<()> {
+    pub(crate) async fn process_transaction(
+        &mut self,
+        t: Transaction
+    ) -> TransactionResult<()> {
         let result: TransactionResult<()> = match t.ttype {
-            TransactionType::Deposit => self.deposit(&t).await,
+            TransactionType::Deposit    => self.deposit(&t).await,
             TransactionType::Withdrawal => self.withdraw(&t).await,
-            TransactionType::Dispute => self.dispute(&t).await,
-            TransactionType::Resolve => self.resolve(&t).await,
+            TransactionType::Dispute    => self.dispute(&t).await,
+            TransactionType::Resolve    => self.resolve(&t).await,
             TransactionType::Chargeback => self.chargeback(&t).await,
         };
         if let Err(transaction_error) = result {
