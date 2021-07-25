@@ -7,13 +7,10 @@ use crate::core::*;
 use crate::error::{AppError, AppResult};
 use std::path::PathBuf;
 use tokio;
-use tokio::task::{spawn, JoinHandle};
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    let join_handle: JoinHandle<AppResult<()>> = spawn(run_transaction_engine());
-    join_handle.await??;
-    Ok(())
+    tokio::spawn(run_transaction_engine()).await?
 }
 
 async fn run_transaction_engine() -> AppResult<()> {
