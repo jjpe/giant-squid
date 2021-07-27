@@ -1,14 +1,20 @@
 //! This module defines core data types.
 
 use crate::error::{AppError, AppResult, TransactionError, TransactionResult};
-use csv_async::AsyncReaderBuilder;
 use rust_decimal::prelude::Decimal;
 use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::Path;
-use tokio::fs::File;
+use std::path::PathBuf;
 use tokio_stream::StreamExt;
+
+#[cfg(not(feature = "async_file_reads"))]
+use csv_async::AsyncReaderBuilder;
+#[cfg(feature = "async_file_reads")]
+use {
+    async_stream::{stream, AsyncStream},
+    std::future::Future,
+};
 
 /// An instance of this type acts as a transaction engine.
 /// It is fed CSV files, which are read and processed asynchronously.
@@ -25,14 +31,14 @@ impl Transactor {
         }
     }
 
-    /// Asynchronously read and process the transactions in a `CSV` file.
+    #[cfg(not(feature = "async_file_reads"))]
+    /// Synchronously read, deserialize and process the transactions in a
+    /// `CSV` file to an async Stream.
+    ///
     /// It is assumed that the last transaction in one `CSV` file is ordered
     /// in time strictly before the first item of the next CSV file.
-    pub async fn process_csv_file<P>(&mut self, filepath: P) -> AppResult<()>
-    where
-        P: AsRef<Path>,
-    {
-        let file = File::open(filepath).await?;
+    pub async fn process_csv_file(&mut self, filepath: PathBuf) -> AppResult<()> {
+        let file = tokio::fs::File::open(filepath).await?;
         let reader = AsyncReaderBuilder::new()
             .trim(csv_async::Trim::All) // Allow nicely aligned columns
             .flexible(true) // Allow rows of type dispute, resolve & chargeback
@@ -47,6 +53,27 @@ impl Transactor {
         Ok(())
     }
 
+    #[rustfmt::skip]
+    #[cfg(feature = "async_file_reads")]
+    /// Asynchronously read, deserialize and process the transactions
+    /// in a `CSV` file to an async Stream using `tokio-uring` (which in turn
+    /// is built on the Linux kernel `io_uring` feature, which provides truly
+    /// async functionality, including async I/O. When not using the `io_uring`
+    /// APIs, all I/O is scheduled in a kernel-level thread pool, but still
+    /// fundamentally synchronously executed).
+    ///
+    /// It is assumed that the last transaction in one `CSV` file is ordered
+    /// in time strictly before the first item of the next CSV file.
+    pub async fn process_csv_file(&mut self, filepath: PathBuf) -> AppResult<()> {
+        let transaction_results: AsyncStream<AppResult<Transaction>, _> =
+            Transaction::stream_from_csv_file(filepath).await?;
+        tokio::pin!(transaction_results);
+        while let Some(transaction_result) = transaction_results.next().await {
+            let transaction: Transaction = transaction_result?;
+            self.process_transaction(transaction).await?;
+        }
+        Ok(())
+    }
 
     #[rustfmt::skip]
     /// Process a single transaction.
@@ -251,8 +278,8 @@ impl Transactor {
 // NOTE: The `*_transactions` fields are of type `BTreeMap<_, _>`
 //       to preserve ordering (which is temporal) while also allowing
 //       non-sequential storage of transactions.
-#[derive(Debug, Deserialize)]
-pub(crate) struct Account {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+pub struct Account {
     pub(crate) id: ClientId,
     pub(crate) available: Currency,
     pub(crate) held: Currency,
@@ -295,7 +322,7 @@ impl Account {
 
 // NOTE: I purposely left out the actual currency designation, since the
 // assignment has done so as well. It's a unicurrency, unibank world.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub(crate) struct Currency(Decimal);
 
 impl Currency {
@@ -359,7 +386,7 @@ pub struct IgnoredTransaction {
     reason: TransactionError,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub struct Transaction {
     #[serde(rename = "type")]
     ttype: TransactionType,
@@ -368,6 +395,104 @@ pub struct Transaction {
     #[serde(rename = "tx")]
     tid: TransactionId,
     amount: Option<Currency>,
+}
+
+impl Transaction {
+    #[cfg(feature = "async_file_reads")]
+    /// Stream transactions from a CSV file located @ `filepath`.
+    async fn stream_from_csv_file(
+        filepath: PathBuf,
+    ) -> AppResult<AsyncStream<AppResult<Self>, impl Future<Output = ()>>> {
+        Ok(stream! {
+            const CAPACITY: usize = 32; // 4096;
+            let file = tokio_uring::fs::File::open(filepath).await?;
+            // NOTE: The `buffer` is used to communicate with the kernel...
+            let mut buffer: Vec<u8> = vec![0; CAPACITY];
+            // NOTE: ... but the kernel has no idea where Unicode char
+            // boundaries are located.  So in order to prevent broken
+            // graphemes, `accumulator` is used as a circular buffer.
+            let mut accumulator: Vec<u8> = Vec::with_capacity(CAPACITY);
+            let mut headers: Vec<String> = vec![];
+            let mut byte_offset: u64 = 0;
+            let mut lineno: usize = 0;
+            loop {
+                // NOTE: Read some data, the `buffer` is passed by ownership
+                // and submitted to the kernel. When the operation completes,
+                // the kernel gives ownership of the buffer back.
+                let (result, buf) = file.read_at(buffer, byte_offset).await;
+                buffer = buf;
+                let num_bytes_read = result?;
+                if num_bytes_read == 0 {
+                    break; // NOTE: Reached EOF
+                }
+                byte_offset += num_bytes_read as u64;
+                accumulator.extend(&buffer[.. num_bytes_read]);
+                const NEWLINE: &[u8] = "\n".as_bytes();
+                while let Some(newline_idx) = find(NEWLINE, &accumulator) {
+                    let line: &[u8] = &accumulator[.. newline_idx];
+                    let line: &str = std::str::from_utf8(line)?;
+                    if lineno == 0 { // NOTE: parse the headers
+                        lineno += 1;
+                        let columns = line.split(',');
+                        headers = columns
+                            .map(str::trim)
+                            .map(String::from)
+                            .collect();
+                        let _ = accumulator
+                            .drain(.. newline_idx + NEWLINE.len()) // drain the line
+                            .collect::<Vec<_>>();
+                    } else {
+                        lineno += 1;
+                        // NOTE: create a `Transaction` value and stream it:
+                        let transaction =
+                            Transaction::from_csv_line(&*headers, line).await;
+                        let _ = accumulator
+                            .drain(.. newline_idx + NEWLINE.len()) // drain the line
+                            .collect::<Vec<_>>();
+                        yield transaction;
+                    }
+                }
+            }
+            assert!(accumulator.is_empty(), "The accumulator isn't empty");
+
+        })
+    }
+
+    #[rustfmt::skip]
+    #[cfg(feature = "async_file_reads")]
+    async fn from_csv_line<S: AsRef<str>>(
+        headers: &[S],
+        line: &str
+    ) -> AppResult<Self> {
+        let mut transaction = Self::default();
+        let columns = line.split(',');
+        for (value, header) in columns.map(str::trim).zip(headers.iter()) {
+            match header.as_ref() {
+                "type" => {
+                    transaction.ttype = match value {
+                        "deposit" => TransactionType::Deposit,
+                        "withdrawal" => TransactionType::Withdrawal,
+                        "dispute" => TransactionType::Dispute,
+                        "resolve" => TransactionType::Resolve,
+                        "chargeback" => TransactionType::Chargeback,
+                        _ => panic!("unknown type '{}'", value),
+                    }
+                }
+                "client" => transaction.cid = ClientId(value.parse()?),
+                "tx" => transaction.tid = TransactionId(value.parse()?),
+                "amount" => {
+                    transaction.amount = match transaction.ttype {
+                        TransactionType::Deposit | TransactionType::Withdrawal => {
+                            Some(Currency::from_str(&value)?)
+                        }
+                        _ => None,
+                    }
+                },
+                header => panic!("unknown header '{}'", header),
+            }
+        }
+        Ok(transaction)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
@@ -384,7 +509,14 @@ pub enum TransactionType {
     Chargeback,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+impl Default for TransactionType {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::Chargeback
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 pub struct ClientId(pub(crate) u16); // Newtyped for type safety reasons
 
 impl fmt::Debug for ClientId {
@@ -398,7 +530,7 @@ impl fmt::Debug for ClientId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 pub struct TransactionId(u32); // Newtyped for type safety reasons
 
 impl fmt::Debug for TransactionId {
@@ -410,6 +542,14 @@ impl fmt::Debug for TransactionId {
         //       debug formatting).
         write!(f, "TransactionId({})", self.0)
     }
+}
+
+#[cfg(feature = "async_file_reads")]
+/// Find a `needle` in a `haystack`.
+fn find(needle: &[u8], haystack: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[cfg(test)]
@@ -679,14 +819,12 @@ mod tests {
     async fn withdraw_from_preexisting_account_with_insufficient_funds() -> AppResult<()> {
         let mut transactor = Transactor::new();
         transactor.ensure_client_account_exists(ClientId(1)).await?;
-        let transactions = vec![
-            Transaction {
-                ttype: TransactionType::Withdrawal,
-                cid: ClientId(1),
-                tid: TransactionId(1),
-                amount: Some(Currency::from_str("0.9975")?),
-            },
-        ];
+        let transactions = vec![Transaction {
+            ttype: TransactionType::Withdrawal,
+            cid: ClientId(1),
+            tid: TransactionId(1),
+            amount: Some(Currency::from_str("0.9975")?),
+        }];
         for transaction in transactions {
             transactor.process_transaction(transaction).await?;
         }
@@ -1332,5 +1470,4 @@ mod tests {
         }
         Ok(())
     }
-
 }
