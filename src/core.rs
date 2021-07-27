@@ -91,21 +91,13 @@ impl Transactor {
             TransactionType::Resolve    => self.resolve(&t).await,
             TransactionType::Chargeback => self.chargeback(&t).await,
         };
-        if let Err(transaction_error) = result {
+        if let Err(_transaction_error) = result {
             // NOTE: The transaction failed. To prevent producing
             //       undesirable output, for now both the error
             //       and the transaction itself are ignored.
             //       This would be inadvisable in a real-world system,
             //       of course, and this note would be replaced by
             //       error handling code and logging.
-            let account = self.account_mut(t.cid).await?;
-            account.ignored_transactions.insert(
-                t.tid,
-                IgnoredTransaction {
-                    transaction: t,
-                    reason: transaction_error,
-                },
-            );
         }
         Ok(())
     }
@@ -296,8 +288,6 @@ pub struct Account {
     pub(crate) resolved_transactions: BTreeMap<TransactionId, Transaction>,
     /// Transactions that have been charged back
     pub(crate) charged_back_transactions: BTreeMap<TransactionId, Transaction>,
-    /// Transactions that have been ignored
-    pub(crate) ignored_transactions: BTreeMap<TransactionId, IgnoredTransaction>,
 }
 
 impl Account {
@@ -313,7 +303,6 @@ impl Account {
             disputed_transactions: BTreeMap::new(),
             resolved_transactions: BTreeMap::new(),
             charged_back_transactions: BTreeMap::new(),
-            ignored_transactions: BTreeMap::new(),
         }
     }
 
