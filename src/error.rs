@@ -75,7 +75,9 @@ pub enum TransactionError {
     AccountBalanceInvariantViolated {
         cid: ClientId,
     },
-    AccountHasInsufficientFundsAvailable,
+    AccountHasInsufficientFundsAvailable {
+        cid: ClientId,
+    },
     AccountIsLocked {
         cid: ClientId,
     },

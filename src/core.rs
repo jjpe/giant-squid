@@ -264,7 +264,9 @@ impl Transactor {
         if account.available - amount >= Currency::ZERO {
             Ok(())
         } else {
-            Err(TransactionError::AccountHasInsufficientFundsAvailable)
+            Err(TransactionError::AccountHasInsufficientFundsAvailable {
+                cid: account.id,
+            })
         }
     }
 }

@@ -197,7 +197,10 @@ async fn withdraw_from_new_account() -> AppResult<()> {
         amount: Some(Currency::from_str("0.9975")?),
     }];
     for transaction in transactions {
-        transactor.process_transaction(transaction).await?;
+        let result = transactor.process_transaction(transaction).await;
+        assert_eq!(result, Err(TransactionError::AccountHasInsufficientFundsAvailable {
+            cid: transaction.cid
+        }));
     }
     let Account {
         id,
@@ -270,7 +273,10 @@ async fn withdraw_from_preexisting_account_with_insufficient_funds() -> AppResul
         amount: Some(Currency::from_str("0.9975")?),
     }];
     for transaction in transactions {
-        transactor.process_transaction(transaction).await?;
+        let result = transactor.process_transaction(transaction).await;
+        assert_eq!(result, Err(TransactionError::AccountHasInsufficientFundsAvailable {
+            cid: transaction.cid,
+        }));
     }
     let Account {
         id,
