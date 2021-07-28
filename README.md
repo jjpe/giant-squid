@@ -14,6 +14,14 @@ in this repo to provide you with a "batteries included" experience.
 The code can be run as specified in the PDF:
 `cargo run -- transactions.csv > accounts.csv`
 
+When the code is run as `cargo run --features="async_file_reads" -- transactions.csv > accounts.csv`,
+this engages a code path that makes use of the Linux kernel's `io_uring` feature.
+Some quick and dirty `time`-based benchmarking suggests that enabling this
+feature flag significantly speeds up computation.
+If further performance improvements are desirable, this could be accomplished by
+e.g. dividing the transactions over the available CPU cores based on the
+transaction's `ClientId`. But that would take additional time.
+
 As indicated, the output of the execution is printed to `stdout`.
 
 ### Testing
