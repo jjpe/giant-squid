@@ -421,7 +421,7 @@ impl Transaction {
         filepath: PathBuf,
     ) -> AppResult<AsyncStream<AppResult<Self>, impl Future<Output = ()>>> {
         Ok(stream! {
-            const CAPACITY: usize = 32; // 4096;
+            const CAPACITY: usize = 8192;
             let file = tokio_uring::fs::File::open(filepath).await?;
             // NOTE: The `buffer` is used to communicate with the kernel...
             let mut buffer: Vec<u8> = vec![0; CAPACITY];
@@ -471,7 +471,6 @@ impl Transaction {
                 }
             }
             assert!(accumulator.is_empty(), "The accumulator isn't empty");
-
         })
     }
 
