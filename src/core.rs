@@ -51,7 +51,16 @@ impl Transactor {
             reader.into_deserialize::<Transaction>();
         while let Some(csv_async_result) = transactions_stream.next().await {
             let transaction: Transaction = csv_async_result?;
-            self.process_transaction(transaction).await?;
+            let result = self.process_transaction(transaction).await;
+            if let Err(_transaction_error) = result {
+                // NOTE: The transaction failed. To prevent producing
+                //       undesirable output, for now both the error
+                //       and the transaction itself are ignored.
+                //       This would be inadvisable in a real-world system,
+                //       of course, and this note would be replaced by
+                //       error handling code and logging.
+                // return Err(_transaction_error);
+            }
         }
         Ok(())
     }
@@ -72,7 +81,16 @@ impl Transactor {
         tokio::pin!(transaction_results);
         while let Some(transaction_result) = transaction_results.next().await {
             let transaction: Transaction = transaction_result?;
-            self.process_transaction(transaction).await?;
+            let result = self.process_transaction(transaction).await;
+            if let Err(_transaction_error) = result {
+                // NOTE: The transaction failed. To prevent producing
+                //       undesirable output, for now both the error
+                //       and the transaction itself are ignored.
+                //       This would be inadvisable in a real-world system,
+                //       of course, and this note would be replaced by
+                //       error handling code and logging.
+                // return Err(_transaction_error);
+            }
         }
         Ok(())
     }
@@ -83,22 +101,13 @@ impl Transactor {
         &mut self,
         t: Transaction
     ) -> TransactionResult<()> {
-        let result: TransactionResult<()> = match t.ttype {
+        match t.ttype {
             TransactionType::Deposit    => self.deposit(&t).await,
             TransactionType::Withdrawal => self.withdraw(&t).await,
             TransactionType::Dispute    => self.dispute(&t).await,
             TransactionType::Resolve    => self.resolve(&t).await,
             TransactionType::Chargeback => self.chargeback(&t).await,
-        };
-        if let Err(_transaction_error) = result {
-            // NOTE: The transaction failed. To prevent producing
-            //       undesirable output, for now both the error
-            //       and the transaction itself are ignored.
-            //       This would be inadvisable in a real-world system,
-            //       of course, and this note would be replaced by
-            //       error handling code and logging.
         }
-        Ok(())
     }
 
     /// Handle a deposit transaction.
