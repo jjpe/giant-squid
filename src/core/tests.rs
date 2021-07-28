@@ -1,5 +1,5 @@
-use crate::error::TransactionError;
 use super::*;
+use crate::error::TransactionError;
 
 #[tokio::test]
 async fn deposit_to_new_account() -> AppResult<()> {
@@ -192,9 +192,12 @@ async fn withdraw_from_new_account() -> AppResult<()> {
     }];
     for transaction in transactions {
         let result = transactor.process_transaction(transaction).await;
-        assert_eq!(result, Err(TransactionError::AccountHasInsufficientFundsAvailable {
-            cid: transaction.cid
-        }));
+        assert_eq!(
+            result,
+            Err(TransactionError::AccountHasInsufficientFundsAvailable {
+                cid: transaction.cid
+            })
+        );
     }
     let Account {
         id,
@@ -252,9 +255,12 @@ async fn withdraw_from_preexisting_account_with_insufficient_funds() -> AppResul
     }];
     for transaction in transactions {
         let result = transactor.process_transaction(transaction).await;
-        assert_eq!(result, Err(TransactionError::AccountHasInsufficientFundsAvailable {
-            cid: transaction.cid,
-        }));
+        assert_eq!(
+            result,
+            Err(TransactionError::AccountHasInsufficientFundsAvailable {
+                cid: transaction.cid,
+            })
+        );
     }
     let Account {
         id,
@@ -440,10 +446,13 @@ async fn dispute_nonexistent_transaction() -> AppResult<()> {
     }];
     for transaction in transactions {
         let result = transactor.process_transaction(transaction).await;
-        assert_eq!(result, Err(TransactionError::NoSuchProcessedTransactionForClient {
-            tid: TransactionId(1),
-            cid: ClientId(1)
-        }));
+        assert_eq!(
+            result,
+            Err(TransactionError::NoSuchProcessedTransactionForClient {
+                tid: TransactionId(1),
+                cid: ClientId(1)
+            })
+        );
     }
     let Account {
         id,
@@ -556,10 +565,13 @@ async fn resolve_nonexistent_disputed_transaction() -> AppResult<()> {
     }];
     for transaction in transactions {
         let result = transactor.process_transaction(transaction).await;
-        assert_eq!(result, Err(TransactionError::NoSuchDisputedTransactionForClient {
-            tid: TransactionId(1),
-            cid: ClientId(1)
-        }));
+        assert_eq!(
+            result,
+            Err(TransactionError::NoSuchDisputedTransactionForClient {
+                tid: TransactionId(1),
+                cid: ClientId(1)
+            })
+        );
     }
     let Account {
         id,
@@ -695,10 +707,13 @@ async fn chargeback_nonexistent_disputed_transaction() -> AppResult<()> {
     }];
     for transaction in transactions {
         let result = transactor.process_transaction(transaction).await;
-        assert_eq!(result, Err(TransactionError::NoSuchResolvedTransactionForClient {
-            tid: TransactionId(1),
-            cid: ClientId(1)
-        }));
+        assert_eq!(
+            result,
+            Err(TransactionError::NoSuchResolvedTransactionForClient {
+                tid: TransactionId(1),
+                cid: ClientId(1)
+            })
+        );
     }
     let Account {
         id,
