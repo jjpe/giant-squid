@@ -270,7 +270,7 @@ impl Transactor {
         account: &Account,
         amount: Currency,
     ) -> TransactionResult<()> {
-        if account.available - amount >= Currency::ZERO {
+        if account.available >= amount {
             Ok(())
         } else {
             Err(TransactionError::AccountHasInsufficientFundsAvailable {
