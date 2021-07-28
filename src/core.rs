@@ -217,6 +217,23 @@ impl Transactor {
         }
     }
 
+    pub async fn print_output(&self) {
+        println!("client,available,held,total,locked");
+        for (ClientId(cid), account) in self.accounts.iter() {
+            let Account {
+                available,
+                held,
+                total,
+                is_locked,
+                ..
+            } = &account;
+            println!(
+                "{},{:?},{:?},{:?},{}",
+                cid, available, held, total, is_locked
+            );
+        }
+    }
+
     #[inline]
     /// Access an account based on `ClientId`. If successful, several checks
     /// are performed to ensure that the account is in the correct state.

@@ -12,11 +12,8 @@
 //! Writing separate `main` functions is a reasonable
 //! way of papering over the different code paths.
 
-mod core;
-mod error;
-
-use crate::core::*;
-use crate::error::{AppError, AppResult};
+use giant_squid::core::*;
+use giant_squid::error::{AppError, AppResult};
 use std::path::PathBuf;
 
 #[cfg(not(feature = "async_file_reads"))]
@@ -39,25 +36,8 @@ async fn process_transactions_future() -> AppResult<()> {
     // NOTE: Unslash this println!() call for a peek at the `transactor`
     //       state after it's done processing all the transactions:
     // println!("transactor: {:#?}", transactor);
-    print_output(&transactor).await;
+    transactor.print_output().await;
     Ok(())
-}
-
-async fn print_output(transactor: &Transactor) {
-    println!("client,available,held,total,locked");
-    for (ClientId(cid), account) in transactor.accounts.iter() {
-        let Account {
-            available,
-            held,
-            total,
-            is_locked,
-            ..
-        } = &account;
-        println!(
-            "{},{:?},{:?},{:?},{}",
-            cid, available, held, total, is_locked
-        );
-    }
 }
 
 fn get_filepath_from_cli_arg() -> AppResult<PathBuf> {
