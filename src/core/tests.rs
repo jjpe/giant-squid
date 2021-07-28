@@ -1,3 +1,4 @@
+use crate::error::TransactionError;
 use super::*;
 
 #[tokio::test]
@@ -22,7 +23,6 @@ async fn deposit_to_new_account() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("1.23476")?);
@@ -44,7 +44,6 @@ async fn deposit_to_new_account() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -71,7 +70,6 @@ async fn deposit_to_preexisting_account() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("1.23476")?);
@@ -93,7 +91,6 @@ async fn deposit_to_preexisting_account() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -139,7 +136,6 @@ async fn successive_deposits() -> AppResult<()> {
     for transaction in transactions {
         transactor.process_transaction(transaction).await?;
     }
-    // println!("{:#?}", transactor);
     let Account {
         id,
         available,
@@ -150,7 +146,6 @@ async fn successive_deposits() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("50.0000")?);
@@ -183,7 +178,6 @@ async fn successive_deposits() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -212,7 +206,6 @@ async fn withdraw_from_new_account() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -223,21 +216,6 @@ async fn withdraw_from_new_account() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(
-        ignored_transactions.iter().collect::<Vec<_>>(),
-        vec![(
-            &TransactionId(1),
-            &IgnoredTransaction {
-                transaction: Transaction {
-                    ttype: TransactionType::Withdrawal,
-                    cid: ClientId(1),
-                    tid: TransactionId(1),
-                    amount: Some(Currency::from_str("0.9975")?),
-                },
-                reason: TransactionError::AccountHasInsufficientFundsAvailable,
-            }
-        )]
-    );
     Ok(())
 }
 
@@ -288,7 +266,6 @@ async fn withdraw_from_preexisting_account_with_insufficient_funds() -> AppResul
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -299,21 +276,6 @@ async fn withdraw_from_preexisting_account_with_insufficient_funds() -> AppResul
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(
-        ignored_transactions.iter().collect::<Vec<_>>(),
-        vec![(
-            &TransactionId(1),
-            &IgnoredTransaction {
-                transaction: Transaction {
-                    ttype: TransactionType::Withdrawal,
-                    cid: ClientId(1),
-                    tid: TransactionId(1),
-                    amount: Some(Currency::from_str("0.9975")?),
-                },
-                reason: TransactionError::AccountHasInsufficientFundsAvailable,
-            }
-        )]
-    );
     Ok(())
 }
 
@@ -349,7 +311,6 @@ async fn withdraw_from_preexisting_account_with_sufficient_funds() -> AppResult<
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("8.9975")?);
@@ -382,7 +343,6 @@ async fn withdraw_from_preexisting_account_with_sufficient_funds() -> AppResult<
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -424,7 +384,6 @@ async fn successively_withdraw_from_preexisting_account() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("8.0000")?);
@@ -466,7 +425,6 @@ async fn successively_withdraw_from_preexisting_account() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -481,7 +439,11 @@ async fn dispute_nonexistent_transaction() -> AppResult<()> {
         amount: None,
     }];
     for transaction in transactions {
-        transactor.process_transaction(transaction).await?;
+        let result = transactor.process_transaction(transaction).await;
+        assert_eq!(result, Err(TransactionError::NoSuchProcessedTransactionForClient {
+            tid: TransactionId(1),
+            cid: ClientId(1)
+        }));
     }
     let Account {
         id,
@@ -493,7 +455,6 @@ async fn dispute_nonexistent_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -504,24 +465,6 @@ async fn dispute_nonexistent_transaction() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(
-        ignored_transactions.iter().collect::<Vec<_>>(),
-        vec![(
-            &TransactionId(1),
-            &IgnoredTransaction {
-                transaction: Transaction {
-                    ttype: TransactionType::Dispute,
-                    cid: ClientId(1),
-                    tid: TransactionId(1),
-                    amount: None,
-                },
-                reason: TransactionError::NoSuchProcessedTransactionForClient {
-                    tid: TransactionId(1),
-                    cid: ClientId(1),
-                },
-            }
-        ),]
-    );
     Ok(())
 }
 
@@ -556,7 +499,6 @@ async fn dispute_existent_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -578,7 +520,6 @@ async fn dispute_existent_transaction() -> AppResult<()> {
     );
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -614,7 +555,11 @@ async fn resolve_nonexistent_disputed_transaction() -> AppResult<()> {
         amount: None,
     }];
     for transaction in transactions {
-        transactor.process_transaction(transaction).await?;
+        let result = transactor.process_transaction(transaction).await;
+        assert_eq!(result, Err(TransactionError::NoSuchDisputedTransactionForClient {
+            tid: TransactionId(1),
+            cid: ClientId(1)
+        }));
     }
     let Account {
         id,
@@ -626,7 +571,6 @@ async fn resolve_nonexistent_disputed_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -637,24 +581,6 @@ async fn resolve_nonexistent_disputed_transaction() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(
-        ignored_transactions.iter().collect::<Vec<_>>(),
-        vec![(
-            &TransactionId(1),
-            &IgnoredTransaction {
-                transaction: Transaction {
-                    ttype: TransactionType::Resolve,
-                    cid: ClientId(1),
-                    tid: TransactionId(1),
-                    amount: None,
-                },
-                reason: TransactionError::NoSuchDisputedTransactionForClient {
-                    tid: TransactionId(1),
-                    cid: ClientId(1),
-                },
-            }
-        ),]
-    );
     Ok(())
 }
 
@@ -701,7 +627,6 @@ async fn resolve_existent_disputed_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("5.0000")?);
@@ -734,7 +659,6 @@ async fn resolve_existent_disputed_transaction() -> AppResult<()> {
         )]
     );
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
@@ -770,7 +694,11 @@ async fn chargeback_nonexistent_disputed_transaction() -> AppResult<()> {
         amount: None,
     }];
     for transaction in transactions {
-        transactor.process_transaction(transaction).await?;
+        let result = transactor.process_transaction(transaction).await;
+        assert_eq!(result, Err(TransactionError::NoSuchResolvedTransactionForClient {
+            tid: TransactionId(1),
+            cid: ClientId(1)
+        }));
     }
     let Account {
         id,
@@ -782,7 +710,6 @@ async fn chargeback_nonexistent_disputed_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("0.0000")?);
@@ -793,24 +720,6 @@ async fn chargeback_nonexistent_disputed_transaction() -> AppResult<()> {
     assert_eq!(disputed_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(resolved_transactions.iter().collect::<Vec<_>>(), vec![]);
     assert_eq!(charged_back_transactions.iter().collect::<Vec<_>>(), vec![]);
-    assert_eq!(
-        ignored_transactions.iter().collect::<Vec<_>>(),
-        vec![(
-            &TransactionId(1),
-            &IgnoredTransaction {
-                transaction: Transaction {
-                    ttype: TransactionType::Chargeback,
-                    cid: ClientId(1),
-                    tid: TransactionId(1),
-                    amount: None,
-                },
-                reason: TransactionError::NoSuchResolvedTransactionForClient {
-                    tid: TransactionId(1),
-                    cid: ClientId(1),
-                },
-            }
-        ),]
-    );
     Ok(())
 }
 
@@ -863,7 +772,6 @@ async fn chargeback_existent_disputed_transaction() -> AppResult<()> {
         disputed_transactions,
         resolved_transactions,
         charged_back_transactions,
-        ignored_transactions,
     } = transactor.accounts.get(&ClientId(1)).unwrap();
     assert_eq!(*id, ClientId(1));
     assert_eq!(*available, Currency::from_str("5.0000")?);
@@ -896,7 +804,6 @@ async fn chargeback_existent_disputed_transaction() -> AppResult<()> {
             }
         )]
     );
-    assert_eq!(ignored_transactions.iter().collect::<Vec<_>>(), vec![]);
     Ok(())
 }
 
