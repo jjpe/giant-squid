@@ -56,7 +56,6 @@ impl Transactor {
         Ok(())
     }
 
-    #[rustfmt::skip]
     #[cfg(feature = "async_file_reads")]
     /// Asynchronously read, deserialize and process the transactions
     /// in a `CSV` file to an async Stream using `tokio-uring` (which in turn
